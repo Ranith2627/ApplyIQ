@@ -1,14 +1,24 @@
-
 import io
 import re
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pypdf import PdfReader
+from sqlalchemy.orm import Session
+
+from database import Base, engine, get_db
+from models import JobApplication
+from schemas import (
+    ApplicationCreate,
+    ApplicationResponse,
+    ApplicationUpdate,
+)
 
 
 app = FastAPI()
+
+Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,
@@ -174,4 +184,151 @@ def analyze_job(data: JobAnalysisRequest):
         "matched_skills": matched_skills,
         "missing_skills": missing_skills,
         "required_skills": required_skills
+    }
+
+
+@app.post(
+    "/applications",
+    response_model=ApplicationResponse
+)
+def create_application(
+    application: ApplicationCreate,
+    db: Session = Depends(get_db)
+):
+    new_application = JobApplication(
+        company=application.company,
+        job_title=application.job_title,
+        location=application.location,
+        job_url=application.job_url,
+        status=application.status,
+        match_score=application.match_score,
+        resume_version=application.resume_version,
+        work_authorization_notes=application.work_authorization_notes,
+        notes=application.notes
+    )
+
+    db.add(new_application)
+    db.commit()
+    db.refresh(new_application)
+
+    return new_application
+
+
+@app.get(
+    "/applications",
+    response_model=list[ApplicationResponse]
+)
+def get_applications(
+    db: Session = Depends(get_db)
+):
+    return (
+        db.query(JobApplication)
+        .order_by(JobApplication.date_added.desc())
+        .all()
+    )
+
+
+@app.put(
+    "/applications/{application_id}",
+    response_model=ApplicationResponse
+)
+def update_application(
+    application_id: int,
+    application: ApplicationUpdate,
+    db: Session = Depends(get_db)
+):
+    existing_application = (
+        db.query(JobApplication)
+        .filter(JobApplication.id == application_id)
+        .first()
+    )
+
+    if not existing_application:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found."
+        )
+
+    update_data = application.model_dump(
+        exclude_unset=True
+    )
+
+    for field, value in update_data.items():
+        setattr(
+            existing_application,
+            field,
+            value
+        )
+
+    db.commit()
+    db.refresh(existing_application)
+
+    return existing_application
+
+
+@app.delete("/applications/{application_id}")
+def delete_application(
+    application_id: int,
+    db: Session = Depends(get_db)
+):
+    application = (
+        db.query(JobApplication)
+        .filter(JobApplication.id == application_id)
+        .first()
+    )
+
+    if not application:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found."
+        )
+
+    db.delete(application)
+    db.commit()
+
+    return {
+        "message": "Application deleted successfully."
+    }
+
+
+@app.get("/dashboard")
+def dashboard(
+    db: Session = Depends(get_db)
+):
+    applications = db.query(JobApplication).all()
+
+    total = len(applications)
+
+    saved = sum(
+        1 for app in applications
+        if app.status.lower() == "saved"
+    )
+
+    applied = sum(
+        1 for app in applications
+        if app.status.lower() == "applied"
+    )
+
+    interview = sum(
+        1 for app in applications
+        if app.status.lower() == "interview"
+    )
+
+    rejected = sum(
+        1 for app in applications
+        if app.status.lower() == "rejected"
+    )
+
+    offer = sum(
+        1 for app in applications
+        if app.status.lower() == "offer"
+    )
+
+    return {
+        "total": total,
+        "saved": saved,
+        "applied": applied,
+        "interview": interview,
+        "rejected": rejected,
+        "offer": offer
     }

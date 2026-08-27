@@ -10,7 +10,9 @@ body {
 }
 
 button,
-textarea {
+textarea,
+input,
+select {
   font-family: inherit;
 }
 
@@ -20,26 +22,68 @@ textarea {
 
 .header {
   text-align: center;
-  padding: 50px 20px 25px;
+  padding: 45px 20px 25px;
 }
 
 .header h1 {
   margin: 0;
   font-size: 46px;
-  letter-spacing: -1px;
 }
 
 .header p {
-  max-width: 700px;
+  max-width: 720px;
   margin: 12px auto 0;
   color: #6b7280;
   line-height: 1.6;
 }
 
 .container {
-  width: min(1150px, 92%);
+  width: min(1200px, 94%);
   margin: 0 auto;
-  padding-bottom: 60px;
+  padding-bottom: 70px;
+}
+
+.dashboard-section,
+.section-card {
+  margin-bottom: 30px;
+}
+
+.dashboard-section h2,
+.section-card > h2 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+}
+
+.dashboard-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+.dashboard-card strong {
+  display: block;
+  font-size: 30px;
+  margin-bottom: 7px;
+}
+
+.dashboard-card span {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.section-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 26px;
 }
 
 .input-grid {
@@ -48,19 +92,13 @@ textarea {
   gap: 24px;
 }
 
-.input-card,
-.result-card,
-.score-card,
-.suggestions-card {
-  background: white;
+.input-card {
   border: 1px solid #e5e7eb;
   border-radius: 14px;
-  padding: 24px;
+  padding: 20px;
 }
 
-.input-card h2,
-.result-card h3,
-.suggestions-card h2 {
+.input-card h3 {
   margin-top: 0;
 }
 
@@ -71,8 +109,8 @@ textarea {
 
 textarea {
   width: 100%;
-  min-height: 300px;
-  padding: 16px;
+  min-height: 260px;
+  padding: 15px;
   border: 1px solid #d1d5db;
   border-radius: 10px;
   resize: vertical;
@@ -81,12 +119,15 @@ textarea {
   outline: none;
 }
 
-textarea:focus {
+textarea:focus,
+input:focus,
+select:focus {
   border-color: #6b7280;
+  outline: none;
 }
 
 .upload-section {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .upload-button {
@@ -117,66 +158,67 @@ textarea:focus {
   display: flex;
   justify-content: center;
   gap: 14px;
-  margin: 28px 0;
+  margin-top: 24px;
 }
 
-.analyze-button,
-.clear-button {
-  padding: 14px 28px;
+.primary-button,
+.secondary-button,
+.delete-button {
   border: none;
-  border-radius: 10px;
-  font-size: 16px;
+  border-radius: 9px;
+  padding: 12px 22px;
+  font-size: 15px;
   font-weight: bold;
   cursor: pointer;
 }
 
-.analyze-button {
+.primary-button {
   background: #1f2937;
   color: white;
 }
 
-.clear-button {
+.primary-button:hover {
+  background: #111827;
+}
+
+.secondary-button {
   background: #e5e7eb;
   color: #1f2937;
 }
 
-.analyze-button:hover {
-  background: #111827;
-}
-
-.clear-button:hover {
+.secondary-button:hover {
   background: #d1d5db;
 }
 
-.analyze-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+.analysis-results {
+  margin-top: 30px;
 }
 
-.results {
-  margin-top: 35px;
+.score-card,
+.result-card,
+.suggestions-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 24px;
 }
 
 .score-card {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 
 .score-label {
-  display: block;
-  font-size: 16px;
   font-weight: bold;
 }
 
 .score-number {
   font-size: 52px;
   font-weight: bold;
-  margin: 12px 0;
+  margin: 10px 0;
 }
 
 .score-message {
   color: #6b7280;
-  margin-bottom: 25px;
 }
 
 .score-breakdown {
@@ -184,39 +226,38 @@ textarea:focus {
   justify-content: center;
   gap: 45px;
   flex-wrap: wrap;
+  margin-top: 20px;
 }
 
 .breakdown-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 100px;
 }
 
 .breakdown-item strong {
-  font-size: 28px;
-  margin-bottom: 5px;
+  font-size: 26px;
+  margin-bottom: 4px;
 }
 
 .breakdown-item span {
-  color: #6b7280;
   font-size: 14px;
+  color: #6b7280;
 }
 
 .result-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 18px;
 }
 
 .skill-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 9px;
 }
 
 .skill-tag {
-  display: inline-block;
   padding: 8px 12px;
   border-radius: 999px;
   background: #eef2f7;
@@ -232,7 +273,7 @@ textarea:focus {
 }
 
 .suggestions-card {
-  margin-top: 24px;
+  margin-top: 22px;
 }
 
 .suggestions-card ul {
@@ -241,25 +282,112 @@ textarea:focus {
 }
 
 .suggestions-card li {
-  margin-bottom: 12px;
-  line-height: 1.6;
+  margin-bottom: 10px;
+  line-height: 1.5;
 }
 
-@media (max-width: 900px) {
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.form-grid input,
+.form-grid select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  font-size: 14px;
+}
+
+.save-button {
+  display: block;
+  margin: 22px auto 0;
+}
+
+.empty-message {
+  text-align: center;
+  color: #6b7280;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 950px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+th {
+  background: #f9fafb;
+  font-size: 14px;
+}
+
+td {
+  font-size: 14px;
+}
+
+td select {
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-link {
+  text-decoration: none;
+  color: #1f2937;
+  font-weight: bold;
+}
+
+.delete-button {
+  background: #fdecec;
+  color: #991b1b;
+  padding: 8px 11px;
+}
+
+.delete-button:hover {
+  background: #fbd5d5;
+}
+
+@media (max-width: 1000px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .input-grid,
-  .result-grid {
+  .result-grid,
+  .form-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .header h1 {
     font-size: 38px;
   }
 
-  textarea {
-    min-height: 220px;
-  }
-
-  .score-breakdown {
-    gap: 25px;
+  .section-card {
+    padding: 18px;
   }
 }
