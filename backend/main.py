@@ -204,7 +204,9 @@ def create_application(
         match_score=application.match_score,
         resume_version=application.resume_version,
         work_authorization_notes=application.work_authorization_notes,
-        notes=application.notes
+        notes=application.notes,
+        date_applied=application.date_applied,
+        follow_up_date=application.follow_up_date
     )
 
     db.add(new_application)

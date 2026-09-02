@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Text
 
 from database import Base
 
@@ -28,6 +28,9 @@ class JobApplication(Base):
     work_authorization_notes = Column(Text, nullable=True)
 
     notes = Column(Text, nullable=True)
+
+    date_applied = Column(Date, nullable=True)
+    follow_up_date = Column(Date, nullable=True)
 
     date_added = Column(
         DateTime,

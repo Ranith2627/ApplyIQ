@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -14,6 +14,8 @@ class ApplicationCreate(BaseModel):
     resume_version: Optional[str] = None
     work_authorization_notes: Optional[str] = None
     notes: Optional[str] = None
+    date_applied: Optional[date] = None
+    follow_up_date: Optional[date] = None
 
 
 class ApplicationUpdate(BaseModel):
@@ -26,6 +28,8 @@ class ApplicationUpdate(BaseModel):
     resume_version: Optional[str] = None
     work_authorization_notes: Optional[str] = None
     notes: Optional[str] = None
+    date_applied: Optional[date] = None
+    follow_up_date: Optional[date] = None
 
 
 class ApplicationResponse(BaseModel):
@@ -39,6 +43,8 @@ class ApplicationResponse(BaseModel):
     resume_version: Optional[str]
     work_authorization_notes: Optional[str]
     notes: Optional[str]
+    date_applied: Optional[date]
+    follow_up_date: Optional[date]
     date_added: datetime
 
     class Config:
