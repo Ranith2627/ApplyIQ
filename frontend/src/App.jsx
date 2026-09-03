@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import "./App.css";
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -14,15 +20,26 @@ const emptyForm = {
   notes: "",
   date_applied: "",
   follow_up_date: "",
+  ai_recommendation: "",
+  ai_reason: "",
+  eligibility_warning: "",
+  ai_job_summary: "",
+  ai_match_explanation: "",
 };
 
 function App() {
+  const [activeView, setActiveView] = useState("dashboard");
+
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+
   const [result, setResult] = useState(null);
+  const [aiResult, setAiResult] = useState(null);
 
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+
   const [fileName, setFileName] = useState("");
 
   const [applications, setApplications] = useState([]);
@@ -34,11 +51,14 @@ function App() {
     interview: 0,
     rejected: 0,
     offer: 0,
+    interview_rate: 0,
+    offer_rate: 0,
   });
 
   const [form, setForm] = useState(emptyForm);
 
   const [editingId, setEditingId] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -50,10 +70,14 @@ function App() {
 
   const loadApplications = async () => {
     try {
-      const response = await fetch(`${API_BASE}/applications`);
+      const response = await fetch(
+        `${API_BASE}/applications`
+      );
 
       if (!response.ok) {
-        throw new Error("Could not load applications.");
+        throw new Error(
+          "Could not load applications."
+        );
       }
 
       const data = await response.json();
@@ -65,10 +89,14 @@ function App() {
 
   const loadDashboard = async () => {
     try {
-      const response = await fetch(`${API_BASE}/dashboard`);
+      const response = await fetch(
+        `${API_BASE}/dashboard`
+      );
 
       if (!response.ok) {
-        throw new Error("Could not load dashboard.");
+        throw new Error(
+          "Could not load dashboard."
+        );
       }
 
       const data = await response.json();
@@ -79,8 +107,10 @@ function App() {
   };
 
   const refreshTracker = async () => {
-    await loadApplications();
-    await loadDashboard();
+    await Promise.all([
+      loadApplications(),
+      loadDashboard(),
+    ]);
   };
 
   const handleResumeUpload = async (event) => {
@@ -109,15 +139,13 @@ function App() {
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      const data = await response.json();
 
+      if (!response.ok) {
         throw new Error(
-          errorData.detail || "Resume upload failed."
+          data.detail || "Resume upload failed."
         );
       }
-
-      const data = await response.json();
 
       setResumeText(data.resume_text);
       setFileName(data.filename);
@@ -130,7 +158,10 @@ function App() {
   };
 
   const analyzeJob = async () => {
-    if (!resumeText.trim() || !jobDescription.trim()) {
+    if (
+      !resumeText.trim() ||
+      !jobDescription.trim()
+    ) {
       alert(
         "Please provide both a resume and job description."
       );
@@ -155,85 +186,92 @@ function App() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Analysis failed.");
-      }
-
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          "Technical analysis failed."
+        );
+      }
 
       setResult(data);
     } catch (error) {
       console.error(error);
-
-      alert(
-        "Could not analyze the job. Make sure the backend is running."
-      );
+      alert(error.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const analyzeWithAI = async () => {
+    if (
+      !resumeText.trim() ||
+      !jobDescription.trim()
+    ) {
+      alert(
+        "Please provide both a resume and job description."
+      );
+      return;
+    }
+
+    try {
+      setAiLoading(true);
+      setAiResult(null);
+
+      const response = await fetch(
+        `${API_BASE}/ai-analyze`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            resume_text: resumeText,
+            job_description: jobDescription,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "AI analysis failed."
+        );
+      }
+
+      setAiResult(data);
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const runFullAnalysis = async () => {
+    if (
+      !resumeText.trim() ||
+      !jobDescription.trim()
+    ) {
+      alert(
+        "Please provide both a resume and job description."
+      );
+      return;
+    }
+
+    await Promise.all([
+      analyzeJob(),
+      analyzeWithAI(),
+    ]);
   };
 
   const clearAnalysis = () => {
     setResumeText("");
     setJobDescription("");
     setResult(null);
+    setAiResult(null);
     setFileName("");
-  };
-
-  const getScoreMessage = () => {
-    if (!result) {
-      return "";
-    }
-
-    if (result.match_percentage >= 80) {
-      return "Strong match. Your resume aligns well with this role.";
-    }
-
-    if (result.match_percentage >= 60) {
-      return "Good match. A few skill gaps may need attention.";
-    }
-
-    if (result.match_percentage >= 40) {
-      return "Moderate match. Your resume has relevant experience, but several skills are missing.";
-    }
-
-    return "Low match. This position requires several skills not currently shown on your resume.";
-  };
-
-  const getSuggestions = () => {
-    if (!result) {
-      return [];
-    }
-
-    const suggestions = [];
-
-    if (result.missing_skills.length > 0) {
-      suggestions.push(
-        `Missing skills detected: ${result.missing_skills.join(
-          ", "
-        )}. Only add these skills to your resume if you have actually used them.`
-      );
-    }
-
-    if (result.matched_skills.length > 0) {
-      suggestions.push(
-        `Make your matching experience easy to find by highlighting: ${result.matched_skills.join(
-          ", "
-        )}.`
-      );
-    }
-
-    if (result.match_percentage < 60) {
-      suggestions.push(
-        "Consider using a more targeted resume version for this job family."
-      );
-    }
-
-    suggestions.push(
-      "Use project bullets that explain what you built, the technologies you used, and the problem you solved."
-    );
-
-    return suggestions;
   };
 
   const handleFormChange = (event) => {
@@ -245,6 +283,58 @@ function App() {
     }));
   };
 
+  const getScoreLabel = () => {
+    if (!result) {
+      return "";
+    }
+
+    if (result.match_percentage >= 80) {
+      return "Excellent Match";
+    }
+
+    if (result.match_percentage >= 60) {
+      return "Strong Match";
+    }
+
+    if (result.match_percentage >= 40) {
+      return "Moderate Match";
+    }
+
+    return "Low Match";
+  };
+
+  const getRuleSuggestions = () => {
+    if (!result) {
+      return [];
+    }
+
+    const suggestions = [];
+
+    if (result.missing_skills.length > 0) {
+      suggestions.push(
+        `Missing detected skills: ${result.missing_skills.join(
+          ", "
+        )}. Only add them to your resume if you have actually used them.`
+      );
+    }
+
+    if (result.matched_skills.length > 0) {
+      suggestions.push(
+        `Highlight these matching skills clearly: ${result.matched_skills.join(
+          ", "
+        )}.`
+      );
+    }
+
+    if (result.match_percentage < 60) {
+      suggestions.push(
+        "Consider using a more targeted resume version for this type of role."
+      );
+    }
+
+    return suggestions;
+  };
+
   const cleanApplicationPayload = () => {
     return {
       company: form.company,
@@ -252,58 +342,96 @@ function App() {
       location: form.location || null,
       job_url: form.job_url || null,
       status: form.status,
-      match_score: result
-        ? result.match_percentage
-        : null,
-      resume_version: form.resume_version || null,
+
+      match_score:
+        result
+          ? result.match_percentage
+          : null,
+
+      resume_version:
+        form.resume_version || null,
+
       work_authorization_notes:
         form.work_authorization_notes || null,
-      notes: form.notes || null,
-      date_applied: form.date_applied || null,
-      follow_up_date: form.follow_up_date || null,
+
+      notes:
+        form.notes || null,
+
+      date_applied:
+        form.date_applied || null,
+
+      follow_up_date:
+        form.follow_up_date || null,
+
+      ai_recommendation:
+        aiResult?.recommended_action ||
+        form.ai_recommendation ||
+        null,
+
+      ai_reason:
+        aiResult?.recommended_action_reason ||
+        form.ai_reason ||
+        null,
+
+      eligibility_warning:
+        aiResult?.eligibility_warning ||
+        form.eligibility_warning ||
+        null,
+
+      ai_job_summary:
+        aiResult?.job_summary ||
+        form.ai_job_summary ||
+        null,
+
+      ai_match_explanation:
+        aiResult?.match_explanation ||
+        form.ai_match_explanation ||
+        null,
     };
   };
 
   const saveApplication = async () => {
-    if (!form.company.trim() || !form.job_title.trim()) {
-      alert("Company and job title are required.");
+    if (
+      !form.company.trim() ||
+      !form.job_title.trim()
+    ) {
+      alert(
+        "Company and job title are required."
+      );
       return;
     }
 
     const payload = cleanApplicationPayload();
 
     try {
-      let response;
+      const wasEditing = Boolean(editingId);
 
-      if (editingId) {
-        response = await fetch(
-          `${API_BASE}/applications/${editingId}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-          }
-        );
-      } else {
-        response = await fetch(
-          `${API_BASE}/applications`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-          }
-        );
-      }
+      const endpoint = editingId
+        ? `${API_BASE}/applications/${editingId}`
+        : `${API_BASE}/applications`;
+
+      const response = await fetch(
+        endpoint,
+        {
+          method:
+            editingId
+              ? "PUT"
+              : "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify(payload),
+        }
+      );
 
       if (!response.ok) {
+        const data = await response.json();
+
         throw new Error(
-          editingId
-            ? "Could not update application."
-            : "Could not save application."
+          data.detail ||
+            "Could not save application."
         );
       }
 
@@ -313,64 +441,128 @@ function App() {
       await refreshTracker();
 
       alert(
-        editingId
+        wasEditing
           ? "Application updated."
           : "Application saved."
       );
+
+      setActiveView("applications");
     } catch (error) {
       console.error(error);
       alert(error.message);
     }
   };
 
-  const saveCurrentAnalysis = async () => {
-    if (!result) {
-      alert("Analyze a job first.");
+  const prepareAnalysisForTracker = () => {
+    if (!result && !aiResult) {
+      alert("Run an analysis first.");
       return;
     }
 
-    if (!form.company.trim() || !form.job_title.trim()) {
-      alert(
-        "Enter the company and job title in the Add Application section first."
-      );
+    setForm((previous) => ({
+      ...previous,
 
+      work_authorization_notes:
+        previous.work_authorization_notes ||
+        aiResult?.eligibility_warning ||
+        "",
+
+      ai_recommendation:
+        aiResult?.recommended_action || "",
+
+      ai_reason:
+        aiResult?.recommended_action_reason || "",
+
+      eligibility_warning:
+        aiResult?.eligibility_warning || "",
+
+      ai_job_summary:
+        aiResult?.job_summary || "",
+
+      ai_match_explanation:
+        aiResult?.match_explanation || "",
+    }));
+
+    setActiveView("applications");
+
+    setTimeout(() => {
       document
         .getElementById("application-form")
         ?.scrollIntoView({
           behavior: "smooth",
         });
-
-      return;
-    }
-
-    await saveApplication();
+    }, 100);
   };
 
   const editApplication = (application) => {
     setEditingId(application.id);
 
     setForm({
-      company: application.company || "",
-      job_title: application.job_title || "",
-      location: application.location || "",
-      job_url: application.job_url || "",
-      status: application.status || "Saved",
+      company:
+        application.company || "",
+
+      job_title:
+        application.job_title || "",
+
+      location:
+        application.location || "",
+
+      job_url:
+        application.job_url || "",
+
+      status:
+        application.status || "Saved",
+
       resume_version:
         application.resume_version || "",
+
       work_authorization_notes:
         application.work_authorization_notes || "",
-      notes: application.notes || "",
+
+      notes:
+        application.notes || "",
+
       date_applied:
         application.date_applied || "",
+
       follow_up_date:
         application.follow_up_date || "",
+
+      ai_recommendation:
+        application.ai_recommendation || "",
+
+      ai_reason:
+        application.ai_reason || "",
+
+      eligibility_warning:
+        application.eligibility_warning || "",
+
+      ai_job_summary:
+        application.ai_job_summary || "",
+
+      ai_match_explanation:
+        application.ai_match_explanation || "",
     });
 
-    document
-      .getElementById("application-form")
-      ?.scrollIntoView({
-        behavior: "smooth",
+    if (application.match_score !== null) {
+      setResult({
+        match_percentage:
+          application.match_score,
+        required_skills: [],
+        matched_skills: [],
+        missing_skills: [],
       });
+    }
+
+    setActiveView("applications");
+
+    setTimeout(() => {
+      document
+        .getElementById("application-form")
+        ?.scrollIntoView({
+          behavior: "smooth",
+        });
+    }, 100);
   };
 
   const cancelEdit = () => {
@@ -387,9 +579,11 @@ function App() {
         `${API_BASE}/applications/${applicationId}`,
         {
           method: "PUT",
+
           headers: {
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
             status: newStatus,
           }),
@@ -397,7 +591,9 @@ function App() {
       );
 
       if (!response.ok) {
-        throw new Error("Could not update status.");
+        throw new Error(
+          "Could not update status."
+        );
       }
 
       await refreshTracker();
@@ -439,250 +635,598 @@ function App() {
     }
   };
 
-  const filteredApplications = useMemo(() => {
-    return applications.filter((application) => {
-      const search = searchTerm.toLowerCase();
-
-      const matchesSearch =
-        application.company
-          .toLowerCase()
-          .includes(search) ||
-        application.job_title
-          .toLowerCase()
-          .includes(search) ||
-        (application.location || "")
-          .toLowerCase()
-          .includes(search);
-
-      const matchesStatus =
-        statusFilter === "All" ||
-        application.status === statusFilter;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [applications, searchTerm, statusFilter]);
-
-  const getFollowUpClass = (application) => {
-    if (
-      !application.follow_up_date ||
-      application.status === "Rejected" ||
-      application.status === "Offer"
-    ) {
-      return "";
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const followUp = new Date(
-      `${application.follow_up_date}T00:00:00`
+  const exportApplications = () => {
+    window.open(
+      `${API_BASE}/applications-export`,
+      "_blank"
     );
-
-    if (followUp < today) {
-      return "overdue-row";
-    }
-
-    if (followUp.getTime() === today.getTime()) {
-      return "followup-today-row";
-    }
-
-    return "";
   };
 
-  return (
-    <div className="app">
-      <header className="header">
-        <h1>ApplyIQ</h1>
+  const toggleDetails = (applicationId) => {
+    setExpandedId(
+      expandedId === applicationId
+        ? null
+        : applicationId
+    );
+  };
 
-        <p>
-          Analyze job fit, identify skill gaps, and
-          manage your job search in one place.
-        </p>
-      </header>
+  const filteredApplications = useMemo(() => {
+    return applications.filter(
+      (application) => {
+        const search = searchTerm
+          .trim()
+          .toLowerCase();
 
-      <main className="container">
-        <section className="dashboard-section">
-          <h2>Application Dashboard</h2>
+        const matchesSearch =
+          application.company
+            .toLowerCase()
+            .includes(search) ||
+          application.job_title
+            .toLowerCase()
+            .includes(search) ||
+          (application.location || "")
+            .toLowerCase()
+            .includes(search);
 
-          <div className="dashboard-grid">
-            <div className="dashboard-card">
-              <strong>{dashboard.total}</strong>
-              <span>Total</span>
-            </div>
+        const matchesStatus =
+          statusFilter === "All" ||
+          application.status === statusFilter;
 
-            <div className="dashboard-card">
-              <strong>{dashboard.saved}</strong>
-              <span>Saved</span>
-            </div>
+        return (
+          matchesSearch &&
+          matchesStatus
+        );
+      }
+    );
+  }, [
+    applications,
+    searchTerm,
+    statusFilter,
+  ]);
 
-            <div className="dashboard-card">
-              <strong>{dashboard.applied}</strong>
-              <span>Applied</span>
-            </div>
+  const recentApplications =
+    applications.slice(0, 5);
 
-            <div className="dashboard-card">
-              <strong>{dashboard.interview}</strong>
-              <span>Interview</span>
-            </div>
+  const recommendationClass = (
+    recommendation
+  ) => {
+    if (!recommendation) {
+      return "neutral";
+    }
 
-            <div className="dashboard-card">
-              <strong>{dashboard.rejected}</strong>
-              <span>Rejected</span>
-            </div>
+    return recommendation
+      .toLowerCase()
+      .replaceAll(" ", "-");
+  };
 
-            <div className="dashboard-card">
-              <strong>{dashboard.offer}</strong>
-              <span>Offer</span>
-            </div>
-          </div>
-        </section>
+  const renderDashboard = () => (
+    <>
+      <section className="hero-card">
+        <div>
+          <span className="eyebrow">
+            JOB SEARCH COMMAND CENTER
+          </span>
 
-        <section className="section-card">
-          <h2>Job Match Analyzer</h2>
+          <h1>
+            Build a smarter path to your
+            next opportunity.
+          </h1>
 
-          <div className="input-grid">
-            <div className="input-card">
-              <h3>Resume</h3>
+          <p>
+            Analyze job fit, understand your
+            skill gaps, review eligibility,
+            and manage your application
+            pipeline from one workspace.
+          </p>
 
-              <p>
-                Upload your resume PDF or paste the
-                resume text.
-              </p>
-
-              <div className="upload-section">
-                <label className="upload-button">
-                  {uploading
-                    ? "Reading PDF..."
-                    : "Upload Resume PDF"}
-
-                  <input
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={handleResumeUpload}
-                    disabled={uploading}
-                  />
-                </label>
-
-                {fileName && (
-                  <p className="file-name">
-                    Uploaded: {fileName}
-                  </p>
-                )}
-              </div>
-
-              <textarea
-                placeholder="Your resume text will appear here..."
-                value={resumeText}
-                onChange={(event) =>
-                  setResumeText(
-                    event.target.value
-                  )
-                }
-              />
-            </div>
-
-            <div className="input-card">
-              <h3>Job Description</h3>
-
-              <p>
-                Paste the full job description below.
-              </p>
-
-              <textarea
-                placeholder="Paste the job description here..."
-                value={jobDescription}
-                onChange={(event) =>
-                  setJobDescription(
-                    event.target.value
-                  )
-                }
-              />
-            </div>
-          </div>
-
-          <div className="button-row">
+          <div className="hero-actions">
             <button
-              className="primary-button"
-              onClick={analyzeJob}
-              disabled={loading}
+              className="primary-cta"
+              onClick={() =>
+                setActiveView("analyze")
+              }
             >
-              {loading
-                ? "Analyzing..."
-                : "Analyze Match"}
+              Analyze a Job
             </button>
 
             <button
-              className="secondary-button"
-              onClick={clearAnalysis}
+              className="ghost-cta"
+              onClick={() =>
+                setActiveView(
+                  "applications"
+                )
+              }
             >
-              Clear
+              View Applications
+            </button>
+          </div>
+        </div>
+
+        <div className="hero-score-box">
+          <span>Interview Rate</span>
+
+          <strong>
+            {dashboard.interview_rate}%
+          </strong>
+
+          <p>
+            Based on your current
+            application pipeline.
+          </p>
+        </div>
+      </section>
+
+      <section className="section-heading">
+        <div>
+          <span className="eyebrow">
+            OVERVIEW
+          </span>
+
+          <h2>
+            Application performance
+          </h2>
+        </div>
+      </section>
+
+      <section className="metric-grid">
+        <article className="metric-card">
+          <div className="metric-icon">
+            01
+          </div>
+
+          <span>Total Applications</span>
+
+          <strong>
+            {dashboard.total}
+          </strong>
+
+          <p>
+            All tracked opportunities
+          </p>
+        </article>
+
+        <article className="metric-card">
+          <div className="metric-icon">
+            02
+          </div>
+
+          <span>Applied</span>
+
+          <strong>
+            {dashboard.applied}
+          </strong>
+
+          <p>
+            Applications submitted
+          </p>
+        </article>
+
+        <article className="metric-card">
+          <div className="metric-icon">
+            03
+          </div>
+
+          <span>Interviews</span>
+
+          <strong>
+            {dashboard.interview}
+          </strong>
+
+          <p>
+            Active interview pipeline
+          </p>
+        </article>
+
+        <article className="metric-card">
+          <div className="metric-icon">
+            04
+          </div>
+
+          <span>Offers</span>
+
+          <strong>
+            {dashboard.offer}
+          </strong>
+
+          <p>
+            Successful outcomes
+          </p>
+        </article>
+      </section>
+
+      <section className="dashboard-columns">
+        <article className="surface-card">
+          <div className="card-heading">
+            <div>
+              <span className="eyebrow">
+                PIPELINE
+              </span>
+
+              <h3>
+                Recent Applications
+              </h3>
+            </div>
+
+            <button
+              className="text-button"
+              onClick={() =>
+                setActiveView(
+                  "applications"
+                )
+              }
+            >
+              View all
+            </button>
+          </div>
+
+          {recentApplications.length ===
+          0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">
+                +
+              </div>
+
+              <h4>
+                No applications yet
+              </h4>
+
+              <p>
+                Add your first opportunity
+                to start building your
+                pipeline.
+              </p>
+            </div>
+          ) : (
+            <div className="recent-list">
+              {recentApplications.map(
+                (application) => (
+                  <div
+                    className="recent-item"
+                    key={application.id}
+                  >
+                    <div className="company-avatar">
+                      {application.company
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+                    <div className="recent-copy">
+                      <strong>
+                        {
+                          application.job_title
+                        }
+                      </strong>
+
+                      <span>
+                        {application.company}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`status-pill ${application.status.toLowerCase()}`}
+                    >
+                      {application.status}
+                    </span>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </article>
+
+        <article className="surface-card insights-card">
+          <span className="eyebrow">
+            INSIGHTS
+          </span>
+
+          <h3>
+            Pipeline health
+          </h3>
+
+          <div className="insight-stat">
+            <span>
+              Interview Rate
+            </span>
+
+            <strong>
+              {dashboard.interview_rate}%
+            </strong>
+          </div>
+
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{
+                width: `${Math.min(
+                  dashboard.interview_rate,
+                  100
+                )}%`,
+              }}
+            />
+          </div>
+
+          <div className="insight-stat">
+            <span>
+              Offer Rate
+            </span>
+
+            <strong>
+              {dashboard.offer_rate}%
+            </strong>
+          </div>
+
+          <div className="progress-track">
+            <div
+              className="progress-fill secondary"
+              style={{
+                width: `${Math.min(
+                  dashboard.offer_rate,
+                  100
+                )}%`,
+              }}
+            />
+          </div>
+        </article>
+      </section>
+    </>
+  );
+
+  const renderAnalyzer = () => (
+    <>
+      <section className="page-title">
+        <div>
+          <span className="eyebrow">
+            AI JOB MATCH
+          </span>
+
+          <h1>
+            Find out how well you fit
+            before you apply.
+          </h1>
+
+          <p>
+            Combine technical skill
+            matching with AI-powered
+            analysis.
+          </p>
+        </div>
+      </section>
+
+      <section className="analyzer-grid">
+        <article className="surface-card analyzer-input">
+          <div className="card-number">
+            01
+          </div>
+
+          <h3>Your Resume</h3>
+
+          <p>
+            Upload a PDF or paste your
+            resume text.
+          </p>
+
+          <label className="premium-upload">
+            <span>
+              {uploading
+                ? "Reading resume..."
+                : "Upload PDF Resume"}
+            </span>
+
+            <small>
+              PDF files supported
+            </small>
+
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={
+                handleResumeUpload
+              }
+            />
+          </label>
+
+          {fileName && (
+            <div className="uploaded-file">
+              <span>✓</span>
+              {fileName}
+            </div>
+          )}
+
+          <textarea
+            className="modern-textarea"
+            placeholder="Paste resume text..."
+            value={resumeText}
+            onChange={(event) =>
+              setResumeText(
+                event.target.value
+              )
+            }
+          />
+        </article>
+
+        <article className="surface-card analyzer-input">
+          <div className="card-number">
+            02
+          </div>
+
+          <h3>Job Description</h3>
+
+          <p>
+            Paste the complete job
+            posting.
+          </p>
+
+          <textarea
+            className="modern-textarea job-textarea"
+            placeholder="Paste the job description here..."
+            value={jobDescription}
+            onChange={(event) =>
+              setJobDescription(
+                event.target.value
+              )
+            }
+          />
+        </article>
+      </section>
+
+      <div className="analysis-control-bar">
+        <button
+          className="analysis-button secondary-action"
+          onClick={analyzeJob}
+          disabled={loading}
+        >
+          {loading
+            ? "Analyzing..."
+            : "Technical Match"}
+        </button>
+
+        <button
+          className="analysis-button ai-action"
+          onClick={analyzeWithAI}
+          disabled={aiLoading}
+        >
+          {aiLoading
+            ? "AI Analyzing..."
+            : "AI Analyze"}
+        </button>
+
+        <button
+          className="analysis-button main-action"
+          onClick={runFullAnalysis}
+          disabled={
+            loading || aiLoading
+          }
+        >
+          Run Full Analysis
+        </button>
+
+        <button
+          className="clear-button"
+          onClick={clearAnalysis}
+        >
+          Clear
+        </button>
+      </div>
+
+      {(result || aiResult) && (
+        <section className="results-zone">
+          <div className="section-heading result-heading">
+            <div>
+              <span className="eyebrow">
+                RESULTS
+              </span>
+
+              <h2>
+                Your job match analysis
+              </h2>
+            </div>
+
+            <button
+              className="primary-cta"
+              onClick={
+                prepareAnalysisForTracker
+              }
+            >
+              Add to Tracker
             </button>
           </div>
 
           {result && (
-            <div className="analysis-results">
-              <div className="score-card">
-                <span className="score-label">
-                  Match Score
-                </span>
+            <>
+              <section className="score-layout">
+                <article className="score-visual">
+                  <div
+                    className="score-ring"
+                    style={{
+                      "--score":
+                        `${result.match_percentage}`,
+                    }}
+                  >
+                    <div className="score-inner">
+                      <strong>
+                        {
+                          result.match_percentage
+                        }
+                        %
+                      </strong>
 
-                <div className="score-number">
-                  {result.match_percentage}%
-                </div>
-
-                <p className="score-message">
-                  {getScoreMessage()}
-                </p>
-
-                <div className="score-breakdown">
-                  <div className="breakdown-item">
-                    <strong>
-                      {
-                        result.required_skills
-                          .length
-                      }
-                    </strong>
-                    <span>Required</span>
+                      <span>
+                        Technical Match
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="breakdown-item">
-                    <strong>
+                  <div className="score-copy">
+                    <span className="eyebrow">
+                      MATCH QUALITY
+                    </span>
+
+                    <h3>
+                      {getScoreLabel()}
+                    </h3>
+
+                    <p>
+                      Your resume matches{" "}
                       {
                         result.matched_skills
                           .length
-                      }
-                    </strong>
-                    <span>Matched</span>
-                  </div>
-
-                  <div className="breakdown-item">
-                    <strong>
+                      }{" "}
+                      of{" "}
                       {
-                        result.missing_skills
+                        result.required_skills
                           .length
-                      }
-                    </strong>
-                    <span>Missing</span>
+                      }{" "}
+                      detected skills.
+                    </p>
                   </div>
-                </div>
+                </article>
 
-                <button
-                  className="primary-button analysis-save-button"
-                  onClick={saveCurrentAnalysis}
-                >
-                  Save This Analysis
-                </button>
-              </div>
+                <article className="score-stat-card">
+                  <span>Required</span>
+                  <strong>
+                    {
+                      result.required_skills
+                        .length
+                    }
+                  </strong>
+                </article>
 
-              <div className="result-grid">
-                <div className="result-card">
-                  <h3>Required Skills</h3>
+                <article className="score-stat-card">
+                  <span>Matched</span>
+                  <strong>
+                    {
+                      result.matched_skills
+                        .length
+                    }
+                  </strong>
+                </article>
 
-                  <div className="skill-list">
+                <article className="score-stat-card">
+                  <span>Missing</span>
+                  <strong>
+                    {
+                      result.missing_skills
+                        .length
+                    }
+                  </strong>
+                </article>
+              </section>
+
+              <section className="skill-panels">
+                <article className="skill-panel">
+                  <span className="panel-label">
+                    REQUIRED
+                  </span>
+
+                  <h3>
+                    Required Skills
+                  </h3>
+
+                  <div className="chip-cloud">
                     {result.required_skills.map(
                       (skill) => (
                         <span
-                          className="skill-tag"
+                          className="skill-chip"
                           key={skill}
                         >
                           {skill}
@@ -690,33 +1234,45 @@ function App() {
                       )
                     )}
                   </div>
-                </div>
+                </article>
 
-                <div className="result-card">
-                  <h3>Matched Skills</h3>
+                <article className="skill-panel success">
+                  <span className="panel-label">
+                    MATCHED
+                  </span>
 
-                  <div className="skill-list">
+                  <h3>
+                    Your Strengths
+                  </h3>
+
+                  <div className="chip-cloud">
                     {result.matched_skills.map(
                       (skill) => (
                         <span
-                          className="skill-tag matched"
+                          className="skill-chip success"
                           key={skill}
                         >
-                          {skill}
+                          ✓ {skill}
                         </span>
                       )
                     )}
                   </div>
-                </div>
+                </article>
 
-                <div className="result-card">
-                  <h3>Missing Skills</h3>
+                <article className="skill-panel danger">
+                  <span className="panel-label">
+                    GAPS
+                  </span>
 
-                  <div className="skill-list">
+                  <h3>
+                    Missing Skills
+                  </h3>
+
+                  <div className="chip-cloud">
                     {result.missing_skills.map(
                       (skill) => (
                         <span
-                          className="skill-tag missing"
+                          className="skill-chip danger"
                           key={skill}
                         >
                           {skill}
@@ -724,66 +1280,300 @@ function App() {
                       )
                     )}
                   </div>
+                </article>
+              </section>
+            </>
+          )}
+
+          {aiResult && (
+            <section className="ai-analysis-shell">
+              <div
+                className={`recommendation-banner ${recommendationClass(
+                  aiResult.recommended_action
+                )}`}
+              >
+                <div>
+                  <span className="eyebrow">
+                    AI RECOMMENDATION
+                  </span>
+
+                  <strong>
+                    {
+                      aiResult.recommended_action
+                    }
+                  </strong>
                 </div>
+
+                <p>
+                  {
+                    aiResult.recommended_action_reason
+                  }
+                </p>
               </div>
 
-              <div className="suggestions-card">
-                <h3>
-                  Resume Improvement Suggestions
-                </h3>
+              <div className="ai-content-grid">
+                <article className="surface-card">
+                  <span className="eyebrow">
+                    ROLE SUMMARY
+                  </span>
 
-                <ul>
-                  {getSuggestions().map(
-                    (suggestion, index) => (
-                      <li key={index}>
-                        {suggestion}
-                      </li>
-                    )
-                  )}
-                </ul>
+                  <h3>
+                    What this job is
+                    really asking for
+                  </h3>
+
+                  <p className="body-copy">
+                    {aiResult.job_summary}
+                  </p>
+                </article>
+
+                <article className="surface-card">
+                  <span className="eyebrow">
+                    MATCH EXPLANATION
+                  </span>
+
+                  <h3>
+                    Why you fit
+                  </h3>
+
+                  <p className="body-copy">
+                    {
+                      aiResult.match_explanation
+                    }
+                  </p>
+                </article>
               </div>
-            </div>
+
+              <div className="ai-content-grid">
+                <article className="surface-card list-card success-list">
+                  <span className="eyebrow">
+                    STRENGTHS
+                  </span>
+
+                  <h3>
+                    What helps you
+                  </h3>
+
+                  <ul>
+                    {aiResult.strengths?.map(
+                      (item, index) => (
+                        <li key={index}>
+                          <span>✓</span>
+                          {item}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </article>
+
+                <article className="surface-card list-card">
+                  <span className="eyebrow">
+                    GAPS
+                  </span>
+
+                  <h3>
+                    What to improve
+                  </h3>
+
+                  <ul>
+                    {aiResult.gaps?.map(
+                      (item, index) => (
+                        <li key={index}>
+                          <span>•</span>
+                          {item}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </article>
+              </div>
+
+              <div className="ai-content-grid">
+                <article className="surface-card list-card">
+                  <span className="eyebrow">
+                    REQUIREMENTS
+                  </span>
+
+                  <h3>
+                    Important job
+                    requirements
+                  </h3>
+
+                  <ul>
+                    {aiResult.important_requirements?.map(
+                      (item, index) => (
+                        <li key={index}>
+                          <span>→</span>
+                          {item}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </article>
+
+                <article className="surface-card list-card">
+                  <span className="eyebrow">
+                    RESUME
+                  </span>
+
+                  <h3>
+                    Resume improvements
+                  </h3>
+
+                  <ul>
+                    {aiResult.resume_suggestions?.map(
+                      (item, index) => (
+                        <li key={index}>
+                          <span>→</span>
+                          {item}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </article>
+              </div>
+
+              <article
+                className={`eligibility-panel ${
+                  aiResult.eligibility_warning
+                    ? "warning"
+                    : "clear"
+                }`}
+              >
+                <div className="eligibility-icon">
+                  {aiResult.eligibility_warning
+                    ? "!"
+                    : "✓"}
+                </div>
+
+                <div>
+                  <span className="eyebrow">
+                    WORK AUTHORIZATION
+                  </span>
+
+                  <h3>
+                    Eligibility review
+                  </h3>
+
+                  <p>
+                    {aiResult
+                      .eligibility_warning ||
+                      "No specific work authorization restriction was detected."}
+                  </p>
+                </div>
+              </article>
+            </section>
           )}
         </section>
+      )}
+    </>
+  );
 
-        <section
-          className="section-card"
-          id="application-form"
+  const renderApplications = () => (
+    <>
+      <section className="page-title applications-title">
+        <div>
+          <span className="eyebrow">
+            APPLICATION PIPELINE
+          </span>
+
+          <h1>
+            Track every opportunity in
+            one place.
+          </h1>
+
+          <p>
+            Keep applications, AI
+            recommendations, follow-ups,
+            and outcomes organized.
+          </p>
+        </div>
+
+        <button
+          className="export-button"
+          onClick={exportApplications}
         >
-          <h2>
-            {editingId
-              ? "Edit Application"
-              : "Add Application"}
-          </h2>
+          Export CSV
+        </button>
+      </section>
 
-          <div className="form-grid">
+      <section
+        className="surface-card application-form-card"
+        id="application-form"
+      >
+        <div className="card-heading">
+          <div>
+            <span className="eyebrow">
+              {editingId
+                ? "EDIT RECORD"
+                : "NEW APPLICATION"}
+            </span>
+
+            <h3>
+              {editingId
+                ? "Update application"
+                : "Add opportunity"}
+            </h3>
+          </div>
+        </div>
+
+        {(result || aiResult) &&
+          !editingId && (
+            <div className="linked-analysis">
+              <span>AI</span>
+
+              Current analysis will be
+              attached to this application.
+            </div>
+          )}
+
+        <div className="form-grid">
+          <div className="field-group">
+            <label>Company</label>
+
             <input
               name="company"
-              placeholder="Company"
+              placeholder="e.g. Microsoft"
               value={form.company}
               onChange={handleFormChange}
             />
+          </div>
+
+          <div className="field-group">
+            <label>Job Title</label>
 
             <input
               name="job_title"
-              placeholder="Job Title"
+              placeholder="e.g. Software Engineer I"
               value={form.job_title}
               onChange={handleFormChange}
             />
+          </div>
+
+          <div className="field-group">
+            <label>Location</label>
 
             <input
               name="location"
-              placeholder="Location"
+              placeholder="City, State or Remote"
               value={form.location}
               onChange={handleFormChange}
             />
+          </div>
+
+          <div className="field-group">
+            <label>Job URL</label>
 
             <input
               name="job_url"
-              placeholder="Job URL"
+              placeholder="https://..."
               value={form.job_url}
               onChange={handleFormChange}
             />
+          </div>
+
+          <div className="field-group">
+            <label>Status</label>
 
             <select
               name="status"
@@ -810,81 +1600,108 @@ function App() {
                 Offer
               </option>
             </select>
+          </div>
+
+          <div className="field-group">
+            <label>Resume Version</label>
 
             <input
               name="resume_version"
-              placeholder="Resume Version"
-              value={form.resume_version}
+              placeholder="Software Resume"
+              value={
+                form.resume_version
+              }
               onChange={handleFormChange}
             />
+          </div>
+
+          <div className="field-group">
+            <label>
+              Work Authorization Notes
+            </label>
 
             <input
               name="work_authorization_notes"
-              placeholder="OPT / Sponsorship Notes"
+              placeholder="OPT / sponsorship notes"
               value={
                 form.work_authorization_notes
               }
               onChange={handleFormChange}
             />
+          </div>
+
+          <div className="field-group">
+            <label>Notes</label>
 
             <input
               name="notes"
-              placeholder="Notes"
+              placeholder="Personal notes"
               value={form.notes}
               onChange={handleFormChange}
             />
-
-            <div className="date-field">
-              <label>Date Applied</label>
-
-              <input
-                type="date"
-                name="date_applied"
-                value={form.date_applied}
-                onChange={handleFormChange}
-              />
-            </div>
-
-            <div className="date-field">
-              <label>Follow-Up Date</label>
-
-              <input
-                type="date"
-                name="follow_up_date"
-                value={form.follow_up_date}
-                onChange={handleFormChange}
-              />
-            </div>
           </div>
 
-          <div className="button-row">
+          <div className="field-group">
+            <label>Date Applied</label>
+
+            <input
+              type="date"
+              name="date_applied"
+              value={form.date_applied}
+              onChange={handleFormChange}
+            />
+          </div>
+
+          <div className="field-group">
+            <label>Follow-Up Date</label>
+
+            <input
+              type="date"
+              name="follow_up_date"
+              value={
+                form.follow_up_date
+              }
+              onChange={handleFormChange}
+            />
+          </div>
+        </div>
+
+        <div className="form-actions">
+          <button
+            className="primary-cta"
+            onClick={saveApplication}
+          >
+            {editingId
+              ? "Update Application"
+              : "Save Application"}
+          </button>
+
+          {editingId && (
             <button
-              className="primary-button"
-              onClick={saveApplication}
+              className="ghost-cta"
+              onClick={cancelEdit}
             >
-              {editingId
-                ? "Update Application"
-                : "Save Application"}
+              Cancel
             </button>
+          )}
+        </div>
+      </section>
 
-            {editingId && (
-              <button
-                className="secondary-button"
-                onClick={cancelEdit}
-              >
-                Cancel Edit
-              </button>
-            )}
+      <section className="surface-card tracker-card">
+        <div className="tracker-toolbar">
+          <div>
+            <span className="eyebrow">
+              TRACKER
+            </span>
+
+            <h3>
+              Your applications
+            </h3>
           </div>
-        </section>
-
-        <section className="section-card">
-          <h2>Application Tracker</h2>
 
           <div className="tracker-controls">
             <input
-              className="search-input"
-              placeholder="Search company, job title, or location..."
+              placeholder="Search applications..."
               value={searchTerm}
               onChange={(event) =>
                 setSearchTerm(
@@ -902,7 +1719,7 @@ function App() {
               }
             >
               <option value="All">
-                All Statuses
+                All statuses
               </option>
 
               <option value="Saved">
@@ -926,55 +1743,111 @@ function App() {
               </option>
             </select>
           </div>
+        </div>
 
-          {filteredApplications.length === 0 ? (
-            <p className="empty-message">
-              No matching applications found.
+        {filteredApplications.length ===
+        0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">
+              ◌
+            </div>
+
+            <h4>
+              No applications found
+            </h4>
+
+            <p>
+              Try changing your filters
+              or add a new application.
             </p>
-          ) : (
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Company</th>
-                    <th>Job Title</th>
-                    <th>Location</th>
-                    <th>Status</th>
-                    <th>Match</th>
-                    <th>Date Applied</th>
-                    <th>Follow-Up</th>
-                    <th>Resume</th>
-                    <th>Authorization</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="premium-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Role</th>
+                  <th>Match</th>
+                  <th>AI</th>
+                  <th>Status</th>
+                  <th>Applied</th>
+                  <th>Follow-Up</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
 
-                <tbody>
-                  {filteredApplications.map(
-                    (application) => (
-                      <tr
-                        key={application.id}
-                        className={getFollowUpClass(
-                          application
-                        )}
-                      >
+              <tbody>
+                {filteredApplications.map(
+                  (application) => (
+                    <Fragment
+                      key={application.id}
+                    >
+                      <tr>
                         <td>
-                          {application.company}
+                          <div className="company-cell">
+                            <div className="company-avatar small">
+                              {application.company
+                                .charAt(0)
+                                .toUpperCase()}
+                            </div>
+
+                            <div>
+                              <strong>
+                                {
+                                  application.company
+                                }
+                              </strong>
+
+                              <span>
+                                {application.location ||
+                                  "Location not set"}
+                              </span>
+                            </div>
+                          </div>
                         </td>
 
                         <td>
-                          {
-                            application.job_title
-                          }
+                          <strong>
+                            {
+                              application.job_title
+                            }
+                          </strong>
                         </td>
 
                         <td>
-                          {application.location ||
-                            "-"}
+                          {application.match_score !==
+                          null ? (
+                            <span className="match-pill">
+                              {
+                                application.match_score
+                              }
+                              %
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+
+                        <td>
+                          {application.ai_recommendation ? (
+                            <span
+                              className={`ai-pill ${recommendationClass(
+                                application.ai_recommendation
+                              )}`}
+                            >
+                              {
+                                application.ai_recommendation
+                              }
+                            </span>
+                          ) : (
+                            "-"
+                          )}
                         </td>
 
                         <td>
                           <select
+                            className={`status-select ${application.status.toLowerCase()}`}
                             value={
                               application.status
                             }
@@ -1008,13 +1881,6 @@ function App() {
                         </td>
 
                         <td>
-                          {application.match_score !==
-                          null
-                            ? `${application.match_score}%`
-                            : "-"}
-                        </td>
-
-                        <td>
                           {application.date_applied ||
                             "-"}
                         </td>
@@ -1025,17 +1891,7 @@ function App() {
                         </td>
 
                         <td>
-                          {application.resume_version ||
-                            "-"}
-                        </td>
-
-                        <td>
-                          {application.work_authorization_notes ||
-                            "-"}
-                        </td>
-
-                        <td>
-                          <div className="action-buttons">
+                          <div className="row-actions">
                             {application.job_url && (
                               <a
                                 href={
@@ -1043,44 +1899,223 @@ function App() {
                                 }
                                 target="_blank"
                                 rel="noreferrer"
-                                className="view-link"
+                                className="icon-action"
                               >
-                                View
+                                ↗
                               </a>
                             )}
 
                             <button
-                              className="edit-button"
+                              className="icon-action"
+                              onClick={() =>
+                                toggleDetails(
+                                  application.id
+                                )
+                              }
+                            >
+                              {expandedId ===
+                              application.id
+                                ? "−"
+                                : "+"}
+                            </button>
+
+                            <button
+                              className="icon-action"
                               onClick={() =>
                                 editApplication(
                                   application
                                 )
                               }
                             >
-                              Edit
+                              ✎
                             </button>
 
                             <button
-                              className="delete-button"
+                              className="icon-action danger"
                               onClick={() =>
                                 deleteApplication(
                                   application.id
                                 )
                               }
                             >
-                              Delete
+                              ×
                             </button>
                           </div>
                         </td>
                       </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
+
+                      {expandedId ===
+                        application.id && (
+                        <tr className="detail-row">
+                          <td colSpan="8">
+                            <div className="detail-grid">
+                              <div>
+                                <span className="detail-label">
+                                  AI Recommendation
+                                </span>
+
+                                <p>
+                                  {application.ai_reason ||
+                                    "No AI recommendation saved."}
+                                </p>
+                              </div>
+
+                              <div>
+                                <span className="detail-label">
+                                  Job Summary
+                                </span>
+
+                                <p>
+                                  {application.ai_job_summary ||
+                                    "No AI summary saved."}
+                                </p>
+                              </div>
+
+                              <div>
+                                <span className="detail-label">
+                                  Match Explanation
+                                </span>
+
+                                <p>
+                                  {application.ai_match_explanation ||
+                                    "No explanation saved."}
+                                </p>
+                              </div>
+
+                              <div>
+                                <span className="detail-label">
+                                  Eligibility
+                                </span>
+
+                                <p>
+                                  {application.eligibility_warning ||
+                                    "No eligibility warning saved."}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">
+            A
+          </div>
+
+          <div>
+            <strong>ApplyIQ</strong>
+            <span>
+              AI Career Workspace
+            </span>
+          </div>
+        </div>
+
+        <nav className="nav-list">
+          <button
+            className={
+              activeView === "dashboard"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() =>
+              setActiveView("dashboard")
+            }
+          >
+            <span>⌂</span>
+            Dashboard
+          </button>
+
+          <button
+            className={
+              activeView === "analyze"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() =>
+              setActiveView("analyze")
+            }
+          >
+            <span>✦</span>
+            Analyze Job
+          </button>
+
+          <button
+            className={
+              activeView === "applications"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() =>
+              setActiveView(
+                "applications"
+              )
+            }
+          >
+            <span>▣</span>
+            Applications
+          </button>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="sidebar-mini-card">
+            <span>AI READY</span>
+
+            <strong>
+              Smart job matching
+            </strong>
+
+            <p>
+              Technical analysis +
+              AI recommendations.
+            </p>
+          </div>
+        </div>
+      </aside>
+
+      <div className="main-shell">
+        <header className="topbar">
+          <div>
+            <span className="topbar-label">
+              APPLYIQ WORKSPACE
+            </span>
+          </div>
+
+          <div className="topbar-actions">
+            <div className="status-indicator">
+              <span />
+              System Online
             </div>
-          )}
-        </section>
-      </main>
+
+            <div className="profile-chip">
+              R
+            </div>
+          </div>
+        </header>
+
+        <main className="main-content">
+          {activeView === "dashboard" &&
+            renderDashboard()}
+
+          {activeView === "analyze" &&
+            renderAnalyzer()}
+
+          {activeView === "applications" &&
+            renderApplications()}
+        </main>
+      </div>
     </div>
   );
 }
